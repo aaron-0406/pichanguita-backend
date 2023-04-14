@@ -8,18 +8,21 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  name         String
-  email        String        @unique
-  password     String
-  isProvider   Boolean       @default(false)
-  state        Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  roleId       Int
-  role         Role          @relation(fields: [roleId], references: [id])
-  recoveryCode String?
-  SoccerField  SoccerField[]
+  id              Int           @id @default(autoincrement())
+  name            String
+  email           String?
+  phone           String?
+  password        String
+  isPhoneVerified Boolean       @default(false)
+  isEmailVerified Boolean       @default(false)
+  isProvider      Boolean       @default(false)
+  state           Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  roleId          Int
+  role            Role          @relation(fields: [roleId], references: [id])
+  recoveryCode    String?
+  SoccerField     SoccerField[]
 }
 
 model Role {

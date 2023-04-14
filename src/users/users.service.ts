@@ -9,6 +9,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { GetUsersDto } from './dto/get-user.dto';
 import { PrismaService } from 'src/prisma.service';
 import { BcryptService } from 'src/bcrypt/bcrypt.service';
+import { isEmail, isPhoneNumber } from 'class-validator';
 
 @Injectable()
 export class UsersService {
@@ -17,17 +18,20 @@ export class UsersService {
     const { email, name, password } = createUserDto;
 
     const isThereUser = await this.prisma.user.findFirst({
-      where: { email },
+      where: { OR: { email, phone: email } },
     });
 
     // In case there is a user with this email registered
     if (isThereUser)
-      throw new ConflictException('Este correo ya está registrado');
+      throw new ConflictException(
+        `Este ${isEmail(email) ? 'correo' : 'teléfono'} ya está registrado`,
+      );
 
     const passwordHash = await this.bcrypt.encrypt(password);
     const user = await this.prisma.user.create({
       data: {
-        email,
+        email: isEmail(email) ? email : '',
+        phone: isPhoneNumber(email) ? email : '',
         name,
         password: passwordHash,
         roleId: 2,
@@ -38,6 +42,7 @@ export class UsersService {
         isProvider: true,
         name: true,
         roleId: true,
+        phone: true,
         state: true,
         password: true,
         role: {
@@ -84,13 +89,11 @@ export class UsersService {
 
     const quantity = await this.prisma.user.count({
       where: {
-        OR: [
-          {
-            name: {
-              contains: `%${filter}%`,
-            },
+        OR: {
+          name: {
+            contains: `%${filter}%`,
           },
-        ],
+        },
       },
     });
 
@@ -105,6 +108,7 @@ export class UsersService {
       select: {
         id: true,
         name: true,
+        phone: true,
         email: true,
         state: true,
         isProvider: true,
@@ -128,6 +132,7 @@ export class UsersService {
         id: true,
         name: true,
         email: true,
+        phone: true,
         state: true,
         isProvider: true,
         roleId: true,

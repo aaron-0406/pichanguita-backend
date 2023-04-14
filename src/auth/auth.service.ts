@@ -8,7 +8,10 @@ import { PrismaService } from '../prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { BcryptService } from 'src/bcrypt/bcrypt.service';
 import { JwtService } from '@nestjs/jwt';
+import { isEmail, isMobilePhone } from 'class-validator';
 import { RegisterDto } from './dto/register.dto';
+import { SmsService } from 'src/sms/sms.service';
+import { VerifyPhoneDto } from './dto/verify-phone.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +19,7 @@ export class AuthService {
     private prisma: PrismaService,
     private bcrypt: BcryptService,
     private jwtService: JwtService,
+    private smsService: SmsService,
   ) {}
 
   /**
@@ -25,11 +29,17 @@ export class AuthService {
    */
   async signIn(dtoLogin: LoginDto) {
     const { email } = dtoLogin;
-
     // Query
     const user = await this.prisma.user.findFirst({
       where: {
-        email,
+        OR: [
+          {
+            email: email,
+          },
+          {
+            phone: email,
+          },
+        ],
       },
       select: {
         id: true,
@@ -100,19 +110,29 @@ export class AuthService {
 
   async signUp(dtoRegister: RegisterDto) {
     const { email, name, password } = dtoRegister;
-
     const isThereUser = await this.prisma.user.findFirst({
-      where: { email },
+      where: {
+        OR: [
+          {
+            email: email,
+          },
+          {
+            phone: email,
+          },
+        ],
+      },
     });
 
     // In case there is a user with this email registered
     if (isThereUser)
-      throw new ConflictException('Este correo ya está registrado');
-
+      throw new ConflictException(
+        `Este ${isEmail(email) ? 'correo' : 'teléfono'} ya está registrado`,
+      );
     const passwordHash = await this.bcrypt.encrypt(password);
     const user = await this.prisma.user.create({
       data: {
-        email,
+        email: isEmail(email) ? email : '',
+        phone: isMobilePhone(email) ? email : '',
         name,
         password: passwordHash,
         roleId: 2,
@@ -124,6 +144,7 @@ export class AuthService {
         name: true,
         roleId: true,
         state: true,
+        phone: true,
         password: true,
         role: {
           select: {
@@ -142,6 +163,19 @@ export class AuthService {
         },
       },
     });
+
+    if (isMobilePhone(email)) {
+      const numeroAleatorio = Math.floor(Math.random() * 9000) + 1000;
+
+      await this.smsService.sendSMS(
+        `Codigo de Verificación de su cuenta de Pichanguita: ${numeroAleatorio}`,
+        email,
+      );
+      await this.prisma.user.update({
+        data: { recoveryCode: numeroAleatorio + '' },
+        where: { id: user.id },
+      });
+    }
 
     const {
       password: storedPassword,
@@ -167,5 +201,26 @@ export class AuthService {
       }),
       newUser,
     };
+  }
+
+  async verifyPhone({ id, code }: VerifyPhoneDto) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id,
+      },
+      select: {
+        recoveryCode: true,
+      },
+    });
+
+    // If not exits
+    if (!user) throw new UnauthorizedException();
+
+    if (user.recoveryCode !== code) throw new UnauthorizedException();
+    await this.prisma.user.update({
+      data: { isPhoneVerified: true },
+      where: { id },
+    });
+    return { message: 'Teléfono verificado ' };
   }
 }

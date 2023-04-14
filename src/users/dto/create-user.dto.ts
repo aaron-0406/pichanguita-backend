@@ -1,8 +1,11 @@
-import { IsEmail, IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, Validate, isEmail, isMobilePhone } from 'class-validator';
 
+function isEmailOrPhone(value: string) {
+  return isEmail(value) || isMobilePhone(value);
+}
 export class CreateUserDto {
   @IsNotEmpty()
-  @IsEmail()
+  @Validate(isEmailOrPhone)
   email: string;
 
   @IsNotEmpty()
